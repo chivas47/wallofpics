@@ -38,7 +38,6 @@ button { font-family: inherit; cursor: pointer; }
   padding: 40px 24px; text-align: center;
   background: var(--bg); overflow: hidden;
 }
-/* ambient glow */
 .gate::before {
   content: '';
   position: absolute; inset: 0;
@@ -124,42 +123,6 @@ header {
   font-size: 10px; letter-spacing: .1em;
   text-transform: uppercase; color: var(--dim);
 }
-.tbtn {
-  background: transparent; color: var(--dim);
-  border: 1px solid rgba(240,237,231,.1);
-  border-radius: 2px; padding: 6px 12px;
-  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-  transition: color .2s, border-color .2s;
-}
-.tbtn:hover { color: var(--fg); border-color: rgba(240,237,231,.3); }
-.tbtn.danger:hover { color: var(--coral); border-color: var(--coral); }
-.tbtn:focus-visible { outline: 1px solid var(--lime); outline-offset: 2px; }
-
-/* ===================================================================
-   DROP ZONE
-=================================================================== */
-.drop {
-  margin: var(--gap); padding: 24px 20px;
-  border: 1px dashed rgba(197,245,58,.12); border-radius: 3px;
-  text-align: center; color: var(--dim); font-size: 11px;
-  line-height: 2; letter-spacing: .06em;
-  transition: border-color .2s, background .2s;
-}
-.drop.empty { padding: 80px 20px; }
-.drop strong { color: var(--fg); letter-spacing: .04em; }
-.drop .or { display: block; margin: 8px 0 2px; }
-.drop .picks {
-  display: inline-flex; gap: 8px;
-  flex-wrap: wrap; justify-content: center; margin-top: 6px;
-}
-.drop-ico {
-  display: block; margin: 0 auto 16px; opacity: .35;
-  width: 36px; height: 36px;
-}
-body.dragging .drop {
-  border-color: var(--lime); background: rgba(197,245,58,.04);
-}
-body.dragging .drop strong { color: var(--lime); }
 
 /* ===================================================================
    WALL — dense masonry, photos edge-to-edge
@@ -189,7 +152,6 @@ figure img {
 }
 figure:hover img { transform: scale(1.06); }
 
-/* lime shimmer overlay on hover */
 figure::after {
   content: ''; position: absolute; inset: 0;
   background: rgba(197,245,58,0);
@@ -198,17 +160,6 @@ figure::after {
 figure:hover::after { background: rgba(197,245,58,.05); }
 
 figure:focus-visible { box-shadow: 0 0 0 2px var(--lime) inset; }
-
-.del {
-  position: absolute; top: 7px; right: 7px;
-  width: 22px; height: 22px; border-radius: 2px;
-  background: rgba(8,7,10,.75); color: var(--coral);
-  border: 1px solid rgba(255,68,34,.5);
-  font-size: 12px; display: grid; place-items: center;
-  opacity: 0; transition: opacity .2s, background .15s;
-}
-figure:hover .del, figure:focus-within .del { opacity: 1; }
-.del:hover { background: var(--coral); color: #fff; border-color: var(--coral); }
 
 /* ===================================================================
    LIGHTBOX
@@ -316,29 +267,8 @@ figure:hover .del, figure:focus-within .del { opacity: 1; }
   </div>
   <div class="h-right">
     <span class="count" id="count" aria-live="polite"></span>
-    <button class="tbtn danger" id="clearBtn" hidden>Clear all</button>
   </div>
 </header>
-
-<!-- ── DROP ZONE ──────────────────────────────────────────── -->
-<div class="drop empty" id="drop">
-  <svg class="drop-ico" viewBox="0 0 36 36" fill="none" stroke="currentColor"
-       stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="2" y="8" width="32" height="22" rx="2"/>
-    <path d="M12 8l2-4h8l2 4"/>
-    <circle cx="18" cy="19" r="5"/>
-    <circle cx="18" cy="19" r="2"/>
-    <path d="M28 13h2"/>
-  </svg>
-  <strong>Drop photos here</strong> to pin them to the wall.
-  <span class="or">or</span>
-  <span class="picks">
-    <button class="tbtn" id="pickFiles">Choose files</button>
-    <button class="tbtn" id="pickFolder">Choose folder</button>
-  </span>
-  <input id="fileInput"   type="file" accept="image/*" multiple hidden />
-  <input id="folderInput" type="file" accept="image/*" webkitdirectory multiple hidden />
-</div>
 
 <!-- ── WALL ───────────────────────────────────────────────── -->
 <main class="wall" id="wall" aria-label="Photo gallery"></main>
@@ -359,10 +289,6 @@ figure:hover .del, figure:focus-within .del { opacity: 1; }
 </div>
 
 <!-- ── MUSIC ──────────────────────────────────────────────── -->
-<!--
-  MUSIC SETUP: drop an audio file named  music.mp3  in the same
-  folder as this HTML. Supported: .mp3  .ogg  .aac  .m4a
--->
 <div class="music-fab" id="musicFab" hidden>
   <div class="music-bars" id="musicBars">
     <span></span><span></span><span></span><span></span>
@@ -376,12 +302,8 @@ figure:hover .del, figure:focus-within .del { opacity: 1; }
 </audio>
 
 <script>
-/* =========================================================================
-   CONFIG — change PASSCODE here.
-   Note: browser devtools can bypass this. Use a server-side auth for real
-   privacy (e.g. Cloudflare Access, Netlify Identity).
-   ========================================================================= */
 const PASSCODE = "1234";
+const PHOTO_COUNT = 69;
 
 /* =========================================================================
    GATE
@@ -405,69 +327,23 @@ document.getElementById("gateForm").addEventListener("submit", (e) => {
 });
 
 /* =========================================================================
-   STORAGE — IndexedDB, nothing leaves this device.
-   ========================================================================= */
-const DB_NAME = "wall_db", STORE = "photos";
-
-function openDB() {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () =>
-      req.result.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
-    req.onsuccess = () => res(req.result);
-    req.onerror   = () => rej(req.error);
-  });
-}
-async function dbAll() {
-  const d = await openDB();
-  return new Promise((res, rej) => {
-    const t = d.transaction(STORE).objectStore(STORE).getAll();
-    t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
-  });
-}
-async function dbAdd(blob) {
-  const d = await openDB();
-  return new Promise((res, rej) => {
-    const t = d.transaction(STORE, "readwrite").objectStore(STORE).add({ blob });
-    t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
-  });
-}
-async function dbDel(id) {
-  const d = await openDB();
-  return new Promise((res, rej) => {
-    const t = d.transaction(STORE, "readwrite").objectStore(STORE).delete(id);
-    t.onsuccess = () => res(); t.onerror = () => rej(t.error);
-  });
-}
-async function dbClear() {
-  const d = await openDB();
-  return new Promise((res, rej) => {
-    const t = d.transaction(STORE, "readwrite").objectStore(STORE).clear();
-    t.onsuccess = () => res(); t.onerror = () => rej(t.error);
-  });
-}
-
-/* =========================================================================
    RENDER
    ========================================================================= */
-const wall     = document.getElementById("wall");
-const countEl  = document.getElementById("count");
-const dropEl   = document.getElementById("drop");
-const clearBtn = document.getElementById("clearBtn");
+const wall    = document.getElementById("wall");
+const countEl = document.getElementById("count");
 let items = [];
 
-/* stagger reveal as photos scroll into view */
 const io = new IntersectionObserver((entries) => {
   entries.forEach((e) => {
     if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
   });
 }, { rootMargin: "160px" });
 
-function tile(item) {
+function tile(item, index) {
   const fig = document.createElement("figure");
   fig.tabIndex = 0;
   fig.setAttribute("role", "button");
-  fig.setAttribute("aria-label", "Open photo " + (items.indexOf(item) + 1));
+  fig.setAttribute("aria-label", "Open photo " + (index + 1));
 
   const img = document.createElement("img");
   img.loading = "lazy";
@@ -476,17 +352,10 @@ function tile(item) {
   img.alt = "";
   fig.appendChild(img);
 
-  const del = document.createElement("button");
-  del.className = "del";
-  del.innerHTML = "&times;";
-  del.setAttribute("aria-label", "Remove photo");
-  del.addEventListener("click", (ev) => { ev.stopPropagation(); remove(item); });
-  fig.appendChild(del);
-
-  fig.addEventListener("click",   () => open(items.indexOf(item)));
+  fig.addEventListener("click",   () => open(index));
   fig.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" || ev.key === " ") {
-      ev.preventDefault(); open(items.indexOf(item));
+      ev.preventDefault(); open(index);
     }
   });
 
@@ -494,92 +363,14 @@ function tile(item) {
   return fig;
 }
 
-function refreshChrome() {
-  const n = items.length;
-  countEl.textContent = n ? n + (n === 1 ? " photo" : " photos") : "";
-  clearBtn.hidden = n === 0;
-  dropEl.classList.toggle("empty", n === 0);
-}
-
 function renderAll() {
   wall.innerHTML = "";
   const frag = document.createDocumentFragment();
-  items.forEach((it) => frag.appendChild(tile(it)));
+  items.forEach((it, i) => frag.appendChild(tile(it, i)));
   wall.appendChild(frag);
-  refreshChrome();
+  const n = items.length;
+  countEl.textContent = n ? n + (n === 1 ? " photo" : " photos") : "";
 }
-
-/* =========================================================================
-   IMPORT
-   ========================================================================= */
-function isImg(f) { return f && f.type && f.type.startsWith("image/"); }
-
-async function addBlobs(blobs) {
-  for (const b of blobs) {
-    if (!isImg(b)) continue;
-    const id   = await dbAdd(b);
-    const item = { id, url: URL.createObjectURL(b) };
-    items.push(item);
-    wall.appendChild(tile(item));
-  }
-  refreshChrome();
-}
-
-function walkEntry(entry, out) {
-  return new Promise((resolve) => {
-    if (entry.isFile) {
-      entry.file((f) => { if (isImg(f)) out.push(f); resolve(); });
-    } else if (entry.isDirectory) {
-      const reader = entry.createReader(), all = [];
-      const read = () => reader.readEntries(async (es) => {
-        if (!es.length) { for (const e of all) await walkEntry(e, out); resolve(); }
-        else { all.push(...es); read(); }
-      });
-      read();
-    } else resolve();
-  });
-}
-
-const fileInput   = document.getElementById("fileInput");
-const folderInput = document.getElementById("folderInput");
-document.getElementById("pickFiles").onclick  = () => fileInput.click();
-document.getElementById("pickFolder").onclick = () => folderInput.click();
-fileInput.onchange   = () => { addBlobs([...fileInput.files]);   fileInput.value = ""; };
-folderInput.onchange = () => { addBlobs([...folderInput.files]); folderInput.value = ""; };
-
-let dc = 0;
-window.addEventListener("dragenter", (e) => { e.preventDefault(); dc++; document.body.classList.add("dragging"); });
-window.addEventListener("dragover",  (e) => e.preventDefault());
-window.addEventListener("dragleave", (e) => { e.preventDefault(); if (--dc <= 0) document.body.classList.remove("dragging"); });
-window.addEventListener("drop", async (e) => {
-  e.preventDefault(); dc = 0; document.body.classList.remove("dragging");
-  const dt = e.dataTransfer; if (!dt) return;
-  const entries = [...(dt.items || [])].map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
-  if (entries.length) {
-    const out = [];
-    for (const en of entries) await walkEntry(en, out);
-    addBlobs(out);
-  } else {
-    addBlobs([...dt.files]);
-  }
-});
-
-/* =========================================================================
-   REMOVE / CLEAR
-   ========================================================================= */
-async function remove(item) {
-  await dbDel(item.id);
-  URL.revokeObjectURL(item.url);
-  items = items.filter((x) => x !== item);
-  renderAll();
-}
-clearBtn.onclick = async () => {
-  if (!confirm("Remove all photos from this device?")) return;
-  await dbClear();
-  items.forEach((it) => URL.revokeObjectURL(it.url));
-  items = [];
-  renderAll();
-};
 
 /* =========================================================================
    LIGHTBOX
@@ -604,9 +395,9 @@ document.getElementById("lbPrev").onclick  = prev;
 lb.addEventListener("click", (e) => { if (e.target === lb) close(); });
 document.addEventListener("keydown", (e) => {
   if (!lb.classList.contains("open")) return;
-  if (e.key === "Escape")      close();
-  else if (e.key === "ArrowRight") next();
-  else if (e.key === "ArrowLeft")  prev();
+  if (e.key === "Escape")           close();
+  else if (e.key === "ArrowRight")  next();
+  else if (e.key === "ArrowLeft")   prev();
 });
 
 let sx = 0;
@@ -619,10 +410,10 @@ lb.addEventListener("touchend",   (e) => {
 /* =========================================================================
    MUSIC
    ========================================================================= */
-const audio      = document.getElementById("bgMusic");
-const musicFab   = document.getElementById("musicFab");
-const musicBtn   = document.getElementById("musicBtn");
-const musicBars  = document.getElementById("musicBars");
+const audio     = document.getElementById("bgMusic");
+const musicFab  = document.getElementById("musicFab");
+const musicBtn  = document.getElementById("musicBtn");
+const musicBars = document.getElementById("musicBars");
 let isPlaying = false;
 
 function setPlaying(on) {
@@ -649,17 +440,13 @@ function tryPlayMusic() {
 }
 
 /* =========================================================================
-   BOOT
+   BOOT — load photos from the photos/ folder
    ========================================================================= */
-async function boot() {
-  try {
-    const rows = (await dbAll()).sort((a, b) => a.id - b.id);
-    items = rows.map((r) => ({ id: r.id, url: URL.createObjectURL(r.blob) }));
-    renderAll();
-  } catch (err) {
-    renderAll();
-    console.warn("IndexedDB unavailable:", err);
-  }
+function boot() {
+  items = Array.from({ length: PHOTO_COUNT }, (_, i) => ({
+    url: `photos/${i + 1}.jpg`
+  }));
+  renderAll();
 }
 
 if (sessionStorage.getItem("wall_ok") === "1") unlock();
