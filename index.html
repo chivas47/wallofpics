@@ -123,6 +123,13 @@ header {
   font-size: 10px; letter-spacing: .1em;
   text-transform: uppercase; color: var(--dim);
 }
+.upload-btn {
+  background: transparent; border: none;
+  color: var(--dim); font-size: 18px; line-height: 1;
+  opacity: 0.18; padding: 4px 6px;
+  transition: opacity .2s, color .2s;
+}
+.upload-btn:hover { opacity: 0.7; color: var(--lime); }
 
 /* ===================================================================
    WALL — dense masonry, photos edge-to-edge
@@ -267,6 +274,8 @@ figure:focus-visible { box-shadow: 0 0 0 2px var(--lime) inset; }
   </div>
   <div class="h-right">
     <span class="count" id="count" aria-live="polite"></span>
+    <button class="upload-btn" id="uploadBtn" title="Add photos">+</button>
+    <input id="fileInput" type="file" accept="image/*" multiple hidden />
   </div>
 </header>
 
@@ -304,6 +313,35 @@ figure:focus-visible { box-shadow: 0 0 0 2px var(--lime) inset; }
 <script>
 const PASSCODE = "1234";
 const PHOTO_COUNT = 69;
+
+/* =========================================================================
+   STORAGE — locally uploaded photos, stored in this browser only
+   ========================================================================= */
+const DB_NAME = "wall_db", STORE = "photos";
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () =>
+      req.result.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+}
+async function dbAll() {
+  const d = await openDB();
+  return new Promise((res, rej) => {
+    const t = d.transaction(STORE).objectStore(STORE).getAll();
+    t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
+  });
+}
+async function dbAdd(blob) {
+  const d = await openDB();
+  return new Promise((res, rej) => {
+    const t = d.transaction(STORE, "readwrite").objectStore(STORE).add({ blob });
+    t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
+  });
+}
 
 /* =========================================================================
    GATE
@@ -440,12 +478,34 @@ function tryPlayMusic() {
 }
 
 /* =========================================================================
-   BOOT — load photos from the photos/ folder
+   UPLOAD — hidden button wires to file picker, saves to IndexedDB
    ========================================================================= */
-function boot() {
+const fileInput = document.getElementById("fileInput");
+document.getElementById("uploadBtn").onclick = () => fileInput.click();
+fileInput.onchange = async () => {
+  const files = [...fileInput.files].filter(f => f.type.startsWith("image/"));
+  fileInput.value = "";
+  for (const f of files) {
+    const id  = await dbAdd(f);
+    const item = { id, url: URL.createObjectURL(f), local: true };
+    items.push(item);
+    wall.appendChild(tile(item, items.length - 1));
+  }
+  const n = items.length;
+  countEl.textContent = n ? n + (n === 1 ? " photo" : " photos") : "";
+};
+
+/* =========================================================================
+   BOOT — load static photos from repo + any locally uploaded ones
+   ========================================================================= */
+async function boot() {
   items = Array.from({ length: PHOTO_COUNT }, (_, i) => ({
     url: `photos/${i + 1}.jpg`
   }));
+  try {
+    const rows = (await dbAll()).sort((a, b) => a.id - b.id);
+    rows.forEach(r => items.push({ id: r.id, url: URL.createObjectURL(r.blob), local: true }));
+  } catch (_) {}
   renderAll();
 }
 
